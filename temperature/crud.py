@@ -18,7 +18,7 @@ def get_temperatures(db: Session, city_id: int | None = None) -> list[DBTemperat
     return queryset.all()
 
 
-def get_lastest_temperature_from_external_api(city_name: str) -> tuple[int, datetime]:
+def get_lastest_temperature_from_external_api(city_name: str) -> tuple[float, datetime]:
     api_key = os.getenv("WEATHER_API_KEY")
 
     if api_key is None:
