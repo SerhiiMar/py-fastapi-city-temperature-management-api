@@ -1,7 +1,8 @@
-import os
+import asyncio
 from datetime import datetime
-import requests
+import os
 
+import requests
 from sqlalchemy.orm import Session
 
 from city.crud import get_cities_list
@@ -18,7 +19,7 @@ def get_temperatures(db: Session, city_id: int | None = None) -> list[DBTemperat
     return queryset.all()
 
 
-def get_lastest_temperature_from_external_api(city_name: str) -> tuple[float, datetime]:
+async def get_lastest_temperature_from_external_api(city_name: str) -> tuple[float, datetime]:
     api_key = os.getenv("WEATHER_API_KEY")
 
     if api_key is None:
@@ -26,7 +27,7 @@ def get_lastest_temperature_from_external_api(city_name: str) -> tuple[float, da
 
     url = "http://api.weatherapi.com/v1/current.json"
     payload = {"key": api_key, "q": city_name}
-    result = requests.get(url, params=payload)
+    result = await asyncio.to_thread(requests.get, url, params=payload)
     data = result.json()
     temperature = data["current"]["temp_c"]
     date_time = datetime.strptime(data["current"]["last_updated"], "%Y-%m-%d %H:%M")
@@ -34,8 +35,8 @@ def get_lastest_temperature_from_external_api(city_name: str) -> tuple[float, da
     return temperature, date_time
 
 
-def create_city_temperature(db: Session, db_city: DBCity) -> DBTemperature:
-    temperature, date_time = get_lastest_temperature_from_external_api(db_city.name)
+async def create_city_temperature(db: Session, db_city: DBCity) -> DBTemperature:
+    temperature, date_time = await get_lastest_temperature_from_external_api(db_city.name)
     db_temperature = DBTemperature(
         city_id=db_city.id,
         temperature=temperature,
@@ -47,8 +48,8 @@ def create_city_temperature(db: Session, db_city: DBCity) -> DBTemperature:
     return db_temperature
 
 
-def update_city_temperature(db: Session, db_temperature: DBTemperature) -> DBTemperature:
-    temperature, date_time = get_lastest_temperature_from_external_api(db_temperature.city.name)
+async def update_city_temperature(db: Session, db_temperature: DBTemperature) -> DBTemperature:
+    temperature, date_time = await get_lastest_temperature_from_external_api(db_temperature.city.name)
     db_temperature.temperature = temperature
     db_temperature.date_time = date_time
     db.commit()
@@ -56,10 +57,10 @@ def update_city_temperature(db: Session, db_temperature: DBTemperature) -> DBTem
     return db_temperature
 
 
-def update_all_temperatures(db: Session) -> None:
+async def update_all_temperatures(db: Session) -> None:
     db_cities = get_cities_list(db=db)
     for db_city in db_cities:
         if db_city.temperature:
-            update_city_temperature(db=db, db_temperature=db_city.temperature)
+            await update_city_temperature(db=db, db_temperature=db_city.temperature)
         else:
-            create_city_temperature(db=db, db_city=db_city)
+            await create_city_temperature(db=db, db_city=db_city)
